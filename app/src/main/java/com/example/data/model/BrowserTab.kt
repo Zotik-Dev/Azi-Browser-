@@ -14,11 +14,26 @@ data class BrowserTab(
     val isSecureHttps: Boolean = true,
     val blockedTrackersCount: Int = 0,
     val activeThreat: SecurityThreat? = null,
-    val desktopMode: Boolean = false
+    val desktopMode: Boolean = false,
+    val shieldsEnabled: Boolean = true
 ) {
     val isHome: Boolean
         get() = url == "about:blank" || url.isEmpty()
 
     val displayTitle: String
-        get() = if (isHome) "Home" else if (title.isBlank()) url else title
+        get() = if (isHome) {
+            if (isIncognito) "Private Tab" else "New Tab"
+        } else if (title.isBlank()) {
+            url
+        } else {
+            title
+        }
+
+    val displayDomain: String
+        get() = try {
+            val uri = android.net.Uri.parse(url)
+            uri.host ?: url
+        } catch (_: Exception) {
+            url
+        }
 }

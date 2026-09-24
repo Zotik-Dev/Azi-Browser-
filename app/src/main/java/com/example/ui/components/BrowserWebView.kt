@@ -3,11 +3,13 @@ package com.example.ui.components
 import android.annotation.SuppressLint
 import android.content.Intent
 import android.graphics.Bitmap
+import android.net.Uri
 import android.net.http.SslError
 import android.view.ViewGroup
 import android.webkit.CookieManager
 import android.webkit.SslErrorHandler
 import android.webkit.URLUtil
+import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
@@ -19,10 +21,14 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
+import com.example.data.model.AziShieldsState
 import com.example.data.model.BrowserTab
 import com.example.security.WebShieldEngine
 import java.io.ByteArrayInputStream
@@ -32,8 +38,7 @@ import java.util.Locale
 @Composable
 fun BrowserWebView(
     tab: BrowserTab,
-    isShieldActive: Boolean,
-    isAdBlockerActive: Boolean,
+    shieldsState: AziShieldsState,
     onTabStateUpdate: (
         title: String?,
         url: String?,
@@ -50,6 +55,7 @@ fun BrowserWebView(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    var lastRequestedUrl by remember(tab.id) { mutableStateOf<String?>(null) }
 
     val webView = remember(tab.id) {
         WebView(context).apply {
@@ -68,10 +74,9 @@ fun BrowserWebView(
                 displayZoomControls = false
                 setSupportZoom(true)
                 allowFileAccess = false
-                allowContentAccess = false
+                allowContentAccess = true
                 mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
 
-                // Clean mobile User-Agent
                 userAgentString = if (tab.desktopMode) {
                     "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
                 } else {
@@ -107,18 +112,26 @@ fun BrowserWebView(
                     val scheme = (uri.scheme ?: "").lowercase(Locale.ROOT)
 
                     // Allow normal HTTP/HTTPS web loading
-                    if (scheme == "http" || scheme == "https") {
-                        if (isShieldActive) {
+                    if (scheme == "http" || scheme == "https" || scheme == "about") {
+                        if (shieldsState.isEnabled) {
                             val threat = WebShieldEngine.evaluateUrl(targetUrl)
                             if (threat != null) {
                                 onThreatDetected(targetUrl)
                                 return true
                             }
                         }
+
+                        // HTTPS Upgrade
+                        if (scheme == "http" && shieldsState.isEnabled && shieldsState.upgradeHttps) {
+                            val httpsUrl = uri.buildUpon().scheme("https").build().toString()
+                            view?.loadUrl(httpsUrl)
+                            return true
+                        }
+
                         return false
                     }
 
-                    // External protocols: mailto:, tel:, intent:, market:
+                    // External protocols: mailto:, tel:, intent:, market:, whatsapp:
                     try {
                         val intent = Intent(Intent.ACTION_VIEW, uri).apply {
                             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -134,8 +147,17 @@ fun BrowserWebView(
                     view: WebView?,
                     request: WebResourceRequest?
                 ): WebResourceResponse? {
-                    val reqUrl = request?.url?.toString() ?: return null
-                    if (isAdBlockerActive && WebShieldEngine.isTrackerOrAd(reqUrl)) {
+                    val req = request ?: return null
+
+                    // Never block main frame document
+                    if (req.isForMainFrame) {
+                        return super.shouldInterceptRequest(view, request)
+                    }
+
+                    val reqUrl = req.url?.toString() ?: return null
+
+                    if (shieldsState.isEnabled && shieldsState.blockTrackersAndAds && WebShieldEngine.isTrackerOrAd(reqUrl)) {
+                        onTabStateUpdate(null, null, null, null, null, null, null, 1)
                         val mimeType = when {
                             reqUrl.endsWith(".js", ignoreCase = true) -> "application/javascript"
                             reqUrl.endsWith(".css", ignoreCase = true) -> "text/css"
@@ -150,6 +172,7 @@ fun BrowserWebView(
                             ByteArrayInputStream(ByteArray(0))
                         )
                     }
+
                     return super.shouldInterceptRequest(view, request)
                 }
 
@@ -166,6 +189,11 @@ fun BrowserWebView(
                         safeUrl.startsWith("https://", ignoreCase = true),
                         0
                     )
+
+                    // Inject anti-fingerprinting protection
+                    if (shieldsState.isEnabled && shieldsState.blockFingerprinting) {
+                        view?.evaluateJavascript(WebShieldEngine.PRIVACY_PROTECTION_SCRIPT, null)
+                    }
                 }
 
                 override fun onPageFinished(view: WebView?, url: String?) {
@@ -181,6 +209,10 @@ fun BrowserWebView(
                         safeUrl.startsWith("https://", ignoreCase = true),
                         0
                     )
+
+                    if (shieldsState.isEnabled && shieldsState.blockFingerprinting) {
+                        view?.evaluateJavascript(WebShieldEngine.PRIVACY_PROTECTION_SCRIPT, null)
+                    }
                 }
 
                 override fun onReceivedError(
@@ -254,9 +286,10 @@ fun BrowserWebView(
         }
     }
 
-    // Load initial URL if not home
+    // Only load URL when requested URL has actually changed and is not home
     LaunchedEffect(tab.id, tab.url) {
-        if (!tab.isHome && tab.url.isNotBlank() && webView.url != tab.url) {
+        if (!tab.isHome && tab.url.isNotBlank() && tab.url != "about:blank" && tab.url != lastRequestedUrl) {
+            lastRequestedUrl = tab.url
             webView.loadUrl(tab.url)
         }
     }
@@ -266,10 +299,8 @@ fun BrowserWebView(
             (webView.parent as? ViewGroup)?.removeView(webView)
             webView
         },
-        update = { v ->
-            if (!tab.isHome && tab.url.isNotBlank() && v.url != tab.url) {
-                v.loadUrl(tab.url)
-            }
+        update = {
+            // Note: We do NOT loadUrl here! That prevents infinite reload loops on recompositions.
         },
         modifier = modifier.fillMaxSize()
     )

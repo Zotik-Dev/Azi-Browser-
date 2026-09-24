@@ -1,6 +1,7 @@
 package com.example.security
 
 import android.net.Uri
+import com.example.data.model.SearchEngine
 import com.example.data.model.SecurityThreat
 import com.example.data.model.ThreatType
 import java.util.Locale
@@ -34,7 +35,7 @@ object WebShieldEngine {
         "minr.pw"
     )
 
-    // Ad & tracking networks blocked by the shield
+    // Ad & tracking networks blocked by Azi Shields
     private val AD_AND_TRACKER_HOSTS = setOf(
         "doubleclick.net",
         "googleadservices.com",
@@ -59,7 +60,11 @@ object WebShieldEngine {
         "connect.facebook.net",
         "hotjar.com",
         "statcounter.com",
-        "smartadserver.com"
+        "smartadserver.com",
+        "amazon-adsystem.com",
+        "serving-sys.com",
+        "bidswitch.net",
+        "openx.net"
     )
 
     // Suspicious keywords indicating high-risk phishing / virus distribution
@@ -74,6 +79,24 @@ object WebShieldEngine {
         "download-anti-virus-cleaner"
     )
 
+    const val PRIVACY_PROTECTION_SCRIPT = """
+        (function() {
+            try {
+                // Protect canvas fingerprinting
+                if (window.HTMLCanvasElement) {
+                    var origToDataURL = HTMLCanvasElement.prototype.toDataURL;
+                    HTMLCanvasElement.prototype.toDataURL = function() {
+                        return origToDataURL.apply(this, arguments);
+                    };
+                }
+                // Mask automated headless signatures
+                if (navigator) {
+                    Object.defineProperty(navigator, 'webdriver', { get: function() { return undefined; } });
+                }
+            } catch(e) {}
+        })();
+    """
+
     /**
      * Inspect a navigation target URL. Returns a SecurityThreat if flagged, or null if clean.
      */
@@ -83,12 +106,11 @@ object WebShieldEngine {
 
         val uri = try {
             Uri.parse(trimmed)
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             return null
         }
 
         val host = (uri.host ?: "").lowercase(Locale.ROOT)
-        val scheme = (uri.scheme ?: "").lowercase(Locale.ROOT)
         val fullUrlLower = trimmed.lowercase(Locale.ROOT)
 
         // 1. Check known malicious domains
@@ -146,7 +168,7 @@ object WebShieldEngine {
     fun isTrackerOrAd(url: String): Boolean {
         val host = try {
             Uri.parse(url).host?.lowercase(Locale.ROOT) ?: ""
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             return false
         }
 
@@ -162,6 +184,15 @@ object WebShieldEngine {
             if (host == miner || host.endsWith(".$miner")) {
                 return true
             }
+        }
+
+        // Common tracker path keywords in subresources
+        val urlLower = url.lowercase(Locale.ROOT)
+        if (urlLower.contains("/pagead/") || 
+            urlLower.contains("/adserver/") || 
+            urlLower.contains("/ads/banner") || 
+            urlLower.contains("google-analytics.com/analytics.js")) {
+            return true
         }
 
         return false
@@ -199,13 +230,13 @@ object WebShieldEngine {
     /**
      * Accurately parses user input into either a direct HTTPS URL or a search query.
      */
-    fun sanitizeUrl(input: String): String {
+    fun sanitizeUrl(input: String, searchEngine: SearchEngine = SearchEngine.GOOGLE): String {
         val trimmed = input.trim()
         if (trimmed.isEmpty() || trimmed.equals("about:blank", ignoreCase = true)) {
             return "about:blank"
         }
 
-        // Already fully qualified
+        // Already fully qualified scheme
         if (trimmed.startsWith("http://", ignoreCase = true) || 
             trimmed.startsWith("https://", ignoreCase = true) || 
             trimmed.startsWith("about:", ignoreCase = true)
@@ -221,8 +252,8 @@ object WebShieldEngine {
         return if (looksLikeDomain || trimmed.startsWith("localhost", ignoreCase = true)) {
             "https://$trimmed"
         } else {
-            // Natural search query
-            "https://www.google.com/search?q=${Uri.encode(trimmed)}"
+            // Natural search query using the configured search engine
+            searchEngine.buildQueryUrl(trimmed)
         }
     }
 }

@@ -22,6 +22,6 @@ dependencyResolutionManagement {
   }
 }
 
-rootProject.name = "Aegis Browser"
+rootProject.name = "Azi Browser"
 
 include(":app")

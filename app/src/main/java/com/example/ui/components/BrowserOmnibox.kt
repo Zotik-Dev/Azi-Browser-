@@ -55,10 +55,12 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.data.model.AziShieldsState
 import com.example.data.model.BrowserTab
+import com.example.ui.theme.AziOrange
+import com.example.ui.theme.AziOrangeGlow
 import com.example.ui.theme.CyberBackground
 import com.example.ui.theme.CyberBorder
-import com.example.ui.theme.CyberCyan
 import com.example.ui.theme.CyberDanger
 import com.example.ui.theme.CyberEmerald
 import com.example.ui.theme.CyberIncognito
@@ -66,16 +68,15 @@ import com.example.ui.theme.CyberSurfaceElevated
 import com.example.ui.theme.CyberSurfaceVariant
 import com.example.ui.theme.CyberTextPrimary
 import com.example.ui.theme.CyberTextSecondary
-import com.example.vpn.VpnState
 
 @Composable
 fun BrowserOmnibox(
     currentTab: BrowserTab?,
     tabCount: Int,
-    vpnState: VpnState,
+    shieldsState: AziShieldsState,
     onNavigate: (String) -> Unit,
     onReload: () -> Unit,
-    onOpenVpnSheet: () -> Unit,
+    onOpenShields: () -> Unit,
     onOpenTabManager: () -> Unit,
     onOpenSecurityAudit: () -> Unit,
     modifier: Modifier = Modifier
@@ -115,8 +116,8 @@ fun BrowserOmnibox(
                     .border(
                         1.dp,
                         when {
-                            isFocused -> CyberEmerald
-                            vpnState.isConnected -> CyberCyan.copy(alpha = 0.5f)
+                            isFocused -> AziOrange
+                            shieldsState.isEnabled -> AziOrange.copy(alpha = 0.35f)
                             else -> CyberBorder
                         },
                         RoundedCornerShape(23.dp)
@@ -156,7 +157,7 @@ fun BrowserOmnibox(
                                 Icon(
                                     imageVector = Icons.Default.Search,
                                     contentDescription = "Search",
-                                    tint = CyberEmerald,
+                                    tint = AziOrange,
                                     modifier = Modifier.size(17.dp)
                                 )
                             }
@@ -187,7 +188,7 @@ fun BrowserOmnibox(
                             fontFamily = FontFamily.SansSerif,
                             fontWeight = FontWeight.Medium
                         ),
-                        cursorBrush = SolidColor(CyberEmerald),
+                        cursorBrush = SolidColor(AziOrange),
                         keyboardOptions = KeyboardOptions(
                             keyboardType = KeyboardType.Uri,
                             imeAction = ImeAction.Go
@@ -198,7 +199,7 @@ fun BrowserOmnibox(
                         decorationBox = { innerTextField ->
                             if (textInput.isEmpty() && !isFocused) {
                                 Text(
-                                    text = if (currentTab?.isIncognito == true) "Private search or type URL" else "Search or enter website name...",
+                                    text = if (currentTab?.isIncognito == true) "Private search or type URL" else "Search or enter website address...",
                                     color = CyberTextSecondary,
                                     fontSize = 13.sp,
                                     maxLines = 1,
@@ -209,7 +210,7 @@ fun BrowserOmnibox(
                         }
                     )
 
-                    // Clear button when user typed text
+                    // Clear button when typing
                     if (textInput.isNotEmpty()) {
                         IconButton(
                             onClick = { textInput = "" },
@@ -230,7 +231,7 @@ fun BrowserOmnibox(
                             modifier = Modifier
                                 .size(32.dp)
                                 .clip(CircleShape)
-                                .background(CyberEmerald)
+                                .background(AziOrange)
                                 .clickable { handleGo() }
                                 .testTag("go_button"),
                             contentAlignment = Alignment.Center
@@ -238,7 +239,7 @@ fun BrowserOmnibox(
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.ArrowForward,
                                 contentDescription = "Go",
-                                tint = Color.Black,
+                                tint = Color.White,
                                 modifier = Modifier.size(18.dp)
                             )
                         }
@@ -274,40 +275,50 @@ fun BrowserOmnibox(
 
             Spacer(modifier = Modifier.width(8.dp))
 
-            // VPN Quick Status Pill
+            // Brave-Style Lion Shield Button with Blocked Tracker Badge
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(12.dp))
                     .background(
-                        if (vpnState.isConnected) CyberCyan.copy(alpha = 0.2f)
+                        if (shieldsState.isEnabled) AziOrange.copy(alpha = 0.15f)
                         else CyberSurfaceElevated
                     )
                     .border(
                         1.dp,
-                        if (vpnState.isConnected) CyberCyan else CyberBorder,
+                        if (shieldsState.isEnabled) AziOrange else CyberBorder,
                         RoundedCornerShape(12.dp)
                     )
-                    .clickable { onOpenVpnSheet() }
-                    .padding(horizontal = 8.dp, vertical = 8.dp)
-                    .testTag("vpn_status_pill"),
+                    .clickable { onOpenShields() }
+                    .padding(horizontal = 8.dp, vertical = 7.dp)
+                    .testTag("brave_shield_button"),
                 contentAlignment = Alignment.Center
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    if (vpnState.isConnected) {
-                        Text(
-                            text = vpnState.activeServer.flagEmoji,
-                            fontSize = 14.sp
-                        )
-                    } else {
-                        Icon(
-                            imageVector = Icons.Default.Shield,
-                            contentDescription = "VPN Shield",
-                            tint = if (vpnState.isMalwareShieldActive) CyberEmerald else CyberTextSecondary,
-                            modifier = Modifier.size(16.dp)
-                        )
+                    Icon(
+                        imageVector = Icons.Default.Shield,
+                        contentDescription = "Azi Shields",
+                        tint = if (shieldsState.isEnabled) AziOrange else CyberTextSecondary,
+                        modifier = Modifier.size(18.dp)
+                    )
+
+                    val blockedOnTab = currentTab?.blockedTrackersCount ?: 0
+                    if (blockedOnTab > 0) {
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(AziOrange)
+                                .padding(horizontal = 5.dp, vertical = 1.dp)
+                        ) {
+                            Text(
+                                text = "$blockedOnTab",
+                                color = Color.White,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
                     }
                 }
             }
@@ -343,7 +354,7 @@ fun BrowserOmnibox(
                     .fillMaxWidth()
                     .height(3.dp)
                     .padding(top = 4.dp),
-                color = if (vpnState.isConnected) CyberCyan else CyberEmerald,
+                color = AziOrange,
                 trackColor = Color.Transparent
             )
         }

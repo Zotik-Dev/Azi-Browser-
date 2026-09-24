@@ -43,24 +43,24 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.local.SecurityThreatEntity
+import com.example.data.model.AziShieldsState
+import com.example.ui.theme.AziOrange
 import com.example.ui.theme.CyberBackground
 import com.example.ui.theme.CyberBorder
 import com.example.ui.theme.CyberCardDark
-import com.example.ui.theme.CyberCyan
 import com.example.ui.theme.CyberDanger
 import com.example.ui.theme.CyberDangerBg
 import com.example.ui.theme.CyberEmerald
 import com.example.ui.theme.CyberSurfaceElevated
 import com.example.ui.theme.CyberTextPrimary
 import com.example.ui.theme.CyberTextSecondary
-import com.example.vpn.VpnState
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
 @Composable
 fun SecurityAuditSheet(
-    vpnState: VpnState,
+    shieldsState: AziShieldsState,
     threatEvents: List<SecurityThreatEntity>,
     onPanicWipe: () -> Unit,
     onClose: () -> Unit,
@@ -80,7 +80,7 @@ fun SecurityAuditSheet(
             Icon(
                 imageVector = Icons.Default.GppGood,
                 contentDescription = null,
-                tint = CyberEmerald,
+                tint = AziOrange,
                 modifier = Modifier.size(24.dp)
             )
             Spacer(modifier = Modifier.width(8.dp))
@@ -93,7 +93,7 @@ fun SecurityAuditSheet(
                     letterSpacing = 1.sp
                 )
                 Text(
-                    text = "Real-time virus interception & cryptography audit",
+                    text = "Azi Shields live defense & cryptography telemetry",
                     color = CyberTextSecondary,
                     fontSize = 11.sp
                 )
@@ -123,7 +123,7 @@ fun SecurityAuditSheet(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(16.dp),
                     colors = CardDefaults.cardColors(containerColor = CyberCardDark),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, CyberEmerald)
+                    border = androidx.compose.foundation.BorderStroke(1.dp, AziOrange)
                 ) {
                     Row(
                         modifier = Modifier.padding(16.dp),
@@ -133,13 +133,13 @@ fun SecurityAuditSheet(
                             modifier = Modifier
                                 .size(56.dp)
                                 .clip(CircleShape)
-                                .background(CyberEmerald.copy(alpha = 0.15f))
-                                .border(2.dp, CyberEmerald, CircleShape),
+                                .background(AziOrange.copy(alpha = 0.15f))
+                                .border(2.dp, AziOrange, CircleShape),
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
-                                text = if (vpnState.isConnected) "A+" else "A",
-                                color = CyberEmerald,
+                                text = if (shieldsState.isEnabled) "A+" else "B",
+                                color = if (shieldsState.isEnabled) AziOrange else CyberTextSecondary,
                                 fontSize = 22.sp,
                                 fontWeight = FontWeight.Black
                             )
@@ -147,16 +147,16 @@ fun SecurityAuditSheet(
                         Spacer(modifier = Modifier.width(14.dp))
                         Column {
                             Text(
-                                text = if (vpnState.isConnected) "MAXIMUM DEFENSE ACTIVE" else "HIGH BROWSER DEFENSE",
-                                color = CyberEmerald,
+                                text = if (shieldsState.isEnabled) "SHIELDS FULLY OPERATIONAL" else "SHIELDS PAUSED",
+                                color = if (shieldsState.isEnabled) AziOrange else CyberTextSecondary,
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.Bold,
                                 letterSpacing = 0.5.sp
                             )
                             Text(
-                                text = if (vpnState.isConnected)
-                                    "VPN Tunnel + Web Shield + DoH DNS + Antivirus Scanner fully operational."
-                                else "Web Shield active. Connect VPN to enable end-to-end IP cloaking.",
+                                text = if (shieldsState.isEnabled)
+                                    "Anti-tracking, cross-site cookie isolation, and anti-fingerprinting active."
+                                else "Protection is disabled. Re-enable Azi Shields for privacy.",
                                 color = CyberTextSecondary,
                                 fontSize = 11.sp
                             )
@@ -168,7 +168,7 @@ fun SecurityAuditSheet(
             // Cryptographic Inspection Items
             item {
                 Text(
-                    text = "ACTIVE ENCRYPTION & DEFENSE SUITE",
+                    text = "ACTIVE ENCRYPTION & PRIVACY SUITE",
                     color = CyberTextSecondary,
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold,
@@ -176,12 +176,11 @@ fun SecurityAuditSheet(
                 )
                 Spacer(modifier = Modifier.height(6.dp))
 
-                AuditCheckRow("Cipher Tunnel", if (vpnState.isConnected) vpnState.activeProtocol.cipherDescription else "Direct TLS 1.3 Strict", true)
-                AuditCheckRow("DNS Encryption", "${vpnState.activeDohProvider.name} (DoH)", true)
-                AuditCheckRow("Web Shield Antivirus", "Live signature & heuristics scanner enabled", vpnState.isMalwareShieldActive)
-                AuditCheckRow("Tracker Filter", "${vpnState.blockedTrackersSessionCount} third-party profiling scripts neutralized", vpnState.isAdBlockerActive)
-                AuditCheckRow("WebRTC IP Cloaking", "Direct local IP address leaks intercepted", vpnState.isAntiFingerprintingActive)
-                AuditCheckRow("Cookie Sandboxing", "Cross-site third-party cookie isolation", true)
+                AuditCheckRow("TLS Strict Enforcement", "Enforcing TLS 1.3 encryption on connections", shieldsState.upgradeHttps)
+                AuditCheckRow("Azi Shields Ad Blocker", "Network filtering of tracking beacons & telemetry", shieldsState.blockTrackersAndAds)
+                AuditCheckRow("Anti-Fingerprinting", "Canvas, audio, and device signature spoofing defense", shieldsState.blockFingerprinting)
+                AuditCheckRow("Cookie Annoyance Blocker", "Auto-rejection of invasive tracking banners", shieldsState.blockCookiePopups)
+                AuditCheckRow("Cross-Origin Cookie Sandbox", "Strict isolation between browsing contexts", true)
             }
 
             // Recent Threats Log
@@ -203,7 +202,7 @@ fun SecurityAuditSheet(
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            text = "No malicious domains encountered yet. Web shield is actively scanning.",
+                            text = "No malicious domains encountered. Shields are continuously monitoring.",
                             color = CyberTextSecondary,
                             fontSize = 12.sp
                         )
@@ -220,7 +219,7 @@ fun SecurityAuditSheet(
                     border = androidx.compose.foundation.BorderStroke(1.dp, CyberDanger.copy(alpha = 0.5f))
                 ) {
                     Row(
-                        modifier = Modifier.padding(10.dp),
+                        modifier = Modifier.padding(12.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
@@ -233,14 +232,14 @@ fun SecurityAuditSheet(
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 text = threat.domain,
-                                color = CyberDanger,
+                                color = CyberTextPrimary,
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
                                 text = "${threat.threatType} • $dateStr",
-                                color = CyberTextSecondary,
-                                fontSize = 11.sp
+                                color = CyberDanger,
+                                fontSize = 10.sp
                             )
                         }
                     }
@@ -250,7 +249,7 @@ fun SecurityAuditSheet(
 
         Spacer(modifier = Modifier.height(10.dp))
 
-        // Emergency Panic Wipe Button
+        // Panic Wipe Button
         Button(
             onClick = onPanicWipe,
             modifier = Modifier
@@ -266,50 +265,52 @@ fun SecurityAuditSheet(
             Icon(
                 imageVector = Icons.Default.DeleteForever,
                 contentDescription = null,
-                modifier = Modifier.size(20.dp)
+                modifier = Modifier.size(18.dp)
             )
             Spacer(modifier = Modifier.width(8.dp))
             Text(
-                text = "PANIC WIPE: DESTROY SESSION DATA",
+                text = "Panic Button: Complete Privacy Wipe",
                 fontSize = 13.sp,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = 0.5.sp
+                fontWeight = FontWeight.Bold
             )
         }
     }
 }
 
 @Composable
-private fun AuditCheckRow(
-    title: String,
-    subtitle: String,
-    isActive: Boolean
-) {
-    Row(
+private fun AuditCheckRow(title: String, description: String, isActive: Boolean) {
+    Card(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically
+        shape = RoundedCornerShape(10.dp),
+        colors = CardDefaults.cardColors(containerColor = CyberSurfaceElevated),
+        border = androidx.compose.foundation.BorderStroke(1.dp, CyberBorder)
     ) {
-        Icon(
-            imageVector = if (isActive) Icons.Default.CheckCircle else Icons.Default.Close,
-            contentDescription = null,
-            tint = if (isActive) CyberEmerald else CyberDanger,
-            modifier = Modifier.size(16.dp)
-        )
-        Spacer(modifier = Modifier.width(8.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = title,
-                color = CyberTextPrimary,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Bold
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = if (isActive) Icons.Default.CheckCircle else Icons.Default.Close,
+                contentDescription = null,
+                tint = if (isActive) CyberEmerald else CyberTextSecondary,
+                modifier = Modifier.size(18.dp)
             )
-            Text(
-                text = subtitle,
-                color = CyberTextSecondary,
-                fontSize = 11.sp
-            )
+            Spacer(modifier = Modifier.width(10.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    color = CyberTextPrimary,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    text = description,
+                    color = CyberTextSecondary,
+                    fontSize = 11.sp
+                )
+            }
         }
     }
 }

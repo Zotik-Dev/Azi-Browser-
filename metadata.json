@@ -1,6 +1,6 @@
 {
-  "name": "Aegis Browser",
-  "description": "Ultra-secure encrypted web browser with full VPN tunnel control, virus & phishing defense, DoH DNS protection, and ad/tracker shield.",
+  "name": "Azi Browser",
+  "description": "Fast, private browser with Azi Shields, ad and tracker blocking, fingerprinting defense, and multi-tab browsing.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

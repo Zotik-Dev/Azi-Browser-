@@ -1,15 +1,14 @@
 package com.example
 
 import android.app.Activity
+import android.content.Intent
 import android.os.Bundle
 import android.webkit.WebView
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
-import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -36,19 +35,20 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.ui.BrowserViewModel
+import com.example.ui.components.AziShieldsSheet
 import com.example.ui.components.BottomBrowserBar
 import com.example.ui.components.BookmarksHistoryDialog
 import com.example.ui.components.BrowserOmnibox
 import com.example.ui.components.BrowserWebView
+import com.example.ui.components.ClearDataDialog
 import com.example.ui.components.DownloadScannerDialog
+import com.example.ui.components.FindInPageBar
 import com.example.ui.components.SecurityAuditSheet
 import com.example.ui.components.SpeedDialHome
 import com.example.ui.components.TabManagerSheet
 import com.example.ui.components.ThreatWarningView
-import com.example.ui.components.VpnControlPanel
 import com.example.ui.theme.CyberBackground
 import com.example.ui.theme.MyApplicationTheme
-import com.example.vpn.VpnController
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -57,7 +57,7 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             MyApplicationTheme {
-                AegisBrowserApp()
+                AziBrowserApp()
             }
         }
     }
@@ -65,21 +65,25 @@ class MainActivity : ComponentActivity() {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AegisBrowserApp(
+fun AziBrowserApp(
     viewModel: BrowserViewModel = viewModel()
 ) {
     val context = LocalContext.current
     val tabs by viewModel.tabs.collectAsState()
     val activeTabId by viewModel.activeTabId.collectAsState()
-    val vpnState by viewModel.vpnState.collectAsState()
+    val shieldsState by viewModel.shieldsState.collectAsState()
+    val searchEngine by viewModel.searchEngine.collectAsState()
     val bookmarks by viewModel.bookmarks.collectAsState()
     val history by viewModel.history.collectAsState()
     val threatEvents by viewModel.threatEvents.collectAsState()
 
-    val showVpnSheet by viewModel.showVpnSheet.collectAsState()
+    val showShieldsSheet by viewModel.showShieldsSheet.collectAsState()
     val showTabManager by viewModel.showTabManager.collectAsState()
     val showBookmarksHistory by viewModel.showBookmarksHistory.collectAsState()
     val showSecurityAudit by viewModel.showSecurityAudit.collectAsState()
+    val showClearDataDialog by viewModel.showClearDataDialog.collectAsState()
+    val showFindInPage by viewModel.showFindInPage.collectAsState()
+    val findInPageQuery by viewModel.findInPageQuery.collectAsState()
     val pendingDownload by viewModel.pendingDownload.collectAsState()
 
     val currentTab = viewModel.currentTab
@@ -89,39 +93,15 @@ fun AegisBrowserApp(
     val webViewMap = remember { mutableStateMapOf<String, WebView>() }
     val currentWebView = webViewMap[activeTabId]
 
-    // Android VPN Permission Launcher
-    val vpnPermissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.StartActivityForResult()
-    ) { result ->
-        if (result.resultCode == Activity.RESULT_OK) {
-            VpnController.connect(context)
-            Toast.makeText(context, "VPN Tunnel Initiated", Toast.LENGTH_SHORT).show()
-        } else {
-            Toast.makeText(context, "VPN permission required for encrypted tunnel", Toast.LENGTH_LONG).show()
-        }
-    }
-
-    val toggleVpn = {
-        if (vpnState.isConnected) {
-            VpnController.disconnect(context)
-            Toast.makeText(context, "VPN Disconnected", Toast.LENGTH_SHORT).show()
-        } else {
-            val prepareIntent = VpnController.prepareVpn(context)
-            if (prepareIntent != null) {
-                vpnPermissionLauncher.launch(prepareIntent)
-            } else {
-                VpnController.connect(context)
-            }
-        }
-    }
-
     // Hardware Back Button Handler
     BackHandler(enabled = true) {
         when {
-            showVpnSheet -> viewModel.closeVpnSheet()
+            showFindInPage -> viewModel.closeFindInPage()
+            showShieldsSheet -> viewModel.closeShieldsSheet()
             showTabManager -> viewModel.closeTabManager()
             showBookmarksHistory -> viewModel.closeBookmarksHistory()
             showSecurityAudit -> viewModel.closeSecurityAudit()
+            showClearDataDialog -> viewModel.closeClearDataDialog()
             currentTab?.activeThreat != null -> viewModel.dismissThreatSafely()
             currentWebView?.canGoBack() == true -> currentWebView.goBack()
             currentTab != null && !currentTab.isHome -> viewModel.navigate("about:blank")
@@ -136,38 +116,71 @@ fun AegisBrowserApp(
             .background(CyberBackground),
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
-            BrowserOmnibox(
-                currentTab = currentTab,
-                tabCount = tabs.size,
-                vpnState = vpnState,
-                onNavigate = { viewModel.navigate(it) },
-                onReload = {
-                    if (currentTab?.isHome == true) {
-                        // Refresh home
-                    } else {
-                        currentWebView?.reload()
-                    }
-                },
-                onOpenVpnSheet = { viewModel.openVpnSheet() },
-                onOpenTabManager = { viewModel.openTabManager() },
-                onOpenSecurityAudit = { viewModel.openSecurityAudit() },
-                modifier = Modifier.windowInsetsPadding(WindowInsets.statusBars)
-            )
+            Column(modifier = Modifier.windowInsetsPadding(WindowInsets.statusBars)) {
+                BrowserOmnibox(
+                    currentTab = currentTab,
+                    tabCount = tabs.size,
+                    shieldsState = shieldsState,
+                    onNavigate = { viewModel.navigate(it) },
+                    onReload = {
+                        if (currentTab?.isHome == true) {
+                            // Home already active
+                        } else {
+                            currentWebView?.reload()
+                        }
+                    },
+                    onOpenShields = { viewModel.openShieldsSheet() },
+                    onOpenTabManager = { viewModel.openTabManager() },
+                    onOpenSecurityAudit = { viewModel.openSecurityAudit() }
+                )
+
+                AnimatedVisibility(visible = showFindInPage) {
+                    FindInPageBar(
+                        query = findInPageQuery,
+                        onQueryChange = { query ->
+                            viewModel.updateFindQuery(query)
+                            currentWebView?.findAllAsync(query)
+                        },
+                        onFindNext = { forward ->
+                            currentWebView?.findNext(forward)
+                        },
+                        onClose = {
+                            currentWebView?.clearMatches()
+                            viewModel.closeFindInPage()
+                        }
+                    )
+                }
+            }
         },
         bottomBar = {
             BottomBrowserBar(
                 currentTab = currentTab,
-                vpnState = vpnState,
+                shieldsState = shieldsState,
                 isCurrentBookmarked = isCurrentBookmarked,
                 onBack = { currentWebView?.goBack() },
                 onForward = { currentWebView?.goForward() },
                 onHome = { viewModel.navigate("about:blank") },
-                onOpenVpnSheet = { viewModel.openVpnSheet() },
+                onOpenShields = { viewModel.openShieldsSheet() },
                 onOpenBookmarks = { viewModel.openBookmarksHistory() },
                 onToggleBookmark = { viewModel.toggleBookmarkCurrentPage() },
                 onToggleDesktop = { viewModel.toggleDesktopMode() },
                 onOpenSecurityAudit = { viewModel.openSecurityAudit() },
-                onNewTab = { viewModel.createNewTab() }
+                onNewTab = { viewModel.createNewTab() },
+                onNewIncognitoTab = { viewModel.createNewTab(isIncognito = true) },
+                onClearData = { viewModel.openClearDataDialog() },
+                onShare = {
+                    val urlToShare = currentTab?.url
+                    if (!urlToShare.isNullOrBlank() && !currentTab.isHome) {
+                        val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                            type = "text/plain"
+                            putExtra(Intent.EXTRA_TEXT, urlToShare)
+                        }
+                        context.startActivity(Intent.createChooser(shareIntent, "Share URL"))
+                    } else {
+                        Toast.makeText(context, "No active page to share", Toast.LENGTH_SHORT).show()
+                    }
+                },
+                onFindInPage = { viewModel.openFindInPage() }
             )
         }
     ) { innerPadding ->
@@ -188,14 +201,17 @@ fun AegisBrowserApp(
                         )
                     }
 
-                    // Blank home page with speed dial
+                    // Blank home page with Brave-style dashboard & speed dial
                     currentTab.isHome -> {
                         SpeedDialHome(
-                            vpnState = vpnState,
+                            shieldsState = shieldsState,
                             isIncognito = currentTab.isIncognito,
+                            searchEngine = searchEngine,
+                            onChangeSearchEngine = { viewModel.setSearchEngine(it) },
                             onNavigate = { viewModel.navigate(it) },
-                            onOpenVpnControl = { viewModel.openVpnSheet() },
-                            onOpenSecurityAudit = { viewModel.openSecurityAudit() },
+                            onOpenShields = { viewModel.openShieldsSheet() },
+                            onOpenBookmarks = { viewModel.openBookmarksHistory() },
+                            onOpenHistory = { viewModel.openBookmarksHistory() },
                             onNewIncognitoTab = { viewModel.createNewTab(isIncognito = true) }
                         )
                     }
@@ -204,8 +220,7 @@ fun AegisBrowserApp(
                     else -> {
                         BrowserWebView(
                             tab = currentTab,
-                            isShieldActive = vpnState.isMalwareShieldActive,
-                            isAdBlockerActive = vpnState.isAdBlockerActive,
+                            shieldsState = shieldsState,
                             onTabStateUpdate = { title, url, isLoading, progress, canGoBack, canGoForward, isSecureHttps, blockedTrackerCountInc ->
                                 viewModel.updateTabState(
                                     tabId = currentTab.id,
@@ -234,16 +249,22 @@ fun AegisBrowserApp(
             }
 
             // Overlays & Bottom Sheets
-            if (showVpnSheet) {
+            if (showShieldsSheet) {
                 ModalBottomSheet(
-                    onDismissRequest = { viewModel.closeVpnSheet() },
+                    onDismissRequest = { viewModel.closeShieldsSheet() },
                     sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
                     containerColor = CyberBackground
                 ) {
-                    VpnControlPanel(
-                        vpnState = vpnState,
-                        onToggleConnection = toggleVpn,
-                        onClose = { viewModel.closeVpnSheet() }
+                    AziShieldsSheet(
+                        tab = currentTab,
+                        shieldsState = shieldsState,
+                        onToggleMasterShields = { viewModel.toggleMasterShields(it) },
+                        onToggleBlockAds = { viewModel.toggleBlockAds(it) },
+                        onToggleUpgradeHttps = { viewModel.toggleUpgradeHttps(it) },
+                        onToggleBlockFingerprinting = { viewModel.toggleBlockFingerprinting(it) },
+                        onToggleBlockCookiePopups = { viewModel.toggleBlockCookiePopups(it) },
+                        onToggleBlockScripts = { viewModel.toggleBlockScripts(it) },
+                        onClose = { viewModel.closeShieldsSheet() }
                     )
                 }
             }
@@ -295,15 +316,38 @@ fun AegisBrowserApp(
                     containerColor = CyberBackground
                 ) {
                     SecurityAuditSheet(
-                        vpnState = vpnState,
+                        shieldsState = shieldsState,
                         threatEvents = threatEvents,
                         onPanicWipe = {
-                            viewModel.panicWipeSession(context)
-                            Toast.makeText(context, "Session wiped: Cache, cookies & history destroyed", Toast.LENGTH_SHORT).show()
+                            viewModel.clearBrowsingData(
+                                clearHistory = true,
+                                clearCookies = true,
+                                clearCache = true,
+                                webViews = webViewMap.values
+                            )
+                            viewModel.closeAllTabs()
+                            viewModel.closeSecurityAudit()
+                            Toast.makeText(context, "Azi Privacy Wipe: Cache, cookies & history cleared", Toast.LENGTH_SHORT).show()
                         },
                         onClose = { viewModel.closeSecurityAudit() }
                     )
                 }
+            }
+
+            // Clear Browsing Data Dialog
+            if (showClearDataDialog) {
+                ClearDataDialog(
+                    onDismiss = { viewModel.closeClearDataDialog() },
+                    onConfirmClear = { clearHistory, clearCookies, clearCache ->
+                        viewModel.clearBrowsingData(
+                            clearHistory = clearHistory,
+                            clearCookies = clearCookies,
+                            clearCache = clearCache,
+                            webViews = webViewMap.values
+                        )
+                        Toast.makeText(context, "Selected browsing data deleted", Toast.LENGTH_SHORT).show()
+                    }
+                )
             }
 
             // Download scan alert dialog
@@ -311,7 +355,7 @@ fun AegisBrowserApp(
                 DownloadScannerDialog(
                     prompt = prompt,
                     onConfirm = {
-                        Toast.makeText(context, "Downloading ${prompt.fileName} via encrypted tunnel...", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, "Downloading ${prompt.fileName}...", Toast.LENGTH_SHORT).show()
                     },
                     onDismiss = { viewModel.dismissDownloadPrompt() }
                 )

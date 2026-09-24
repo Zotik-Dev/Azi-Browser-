@@ -2,6 +2,7 @@ package com.example
 
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
+import com.example.data.model.SearchEngine
 import com.example.security.WebShieldEngine
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -19,7 +20,7 @@ class ExampleRobolectricTest {
   fun `read string from context`() {
     val context = ApplicationProvider.getApplicationContext<Context>()
     val appName = context.getString(R.string.app_name)
-    assertEquals("Aegis Browser", appName)
+    assertEquals("Azi Browser", appName)
   }
 
   @Test
@@ -42,7 +43,19 @@ class ExampleRobolectricTest {
     val explicitUrl = WebShieldEngine.sanitizeUrl("https://en.wikipedia.org")
     assertEquals("https://en.wikipedia.org", explicitUrl)
 
-    val searchQuery = WebShieldEngine.sanitizeUrl("news today")
-    assertEquals("https://www.google.com/search?q=news%20today", searchQuery)
+    val braveQuery = WebShieldEngine.sanitizeUrl("news today", searchEngine = SearchEngine.BRAVE)
+    assertEquals("https://search.brave.com/search?q=news%20today", braveQuery)
+
+    val googleQuery = WebShieldEngine.sanitizeUrl("news today", searchEngine = SearchEngine.GOOGLE)
+    assertEquals("https://www.google.com/search?q=news%20today", googleQuery)
+  }
+
+  @Test
+  fun `tracker and ad blocking detects known tracking hosts`() {
+    val isDoubleclickTracker = WebShieldEngine.isTrackerOrAd("https://ad.doubleclick.net/pixel.gif")
+    assertEquals(true, isDoubleclickTracker)
+
+    val isNormalSite = WebShieldEngine.isTrackerOrAd("https://wikipedia.org/logo.png")
+    assertEquals(false, isNormalSite)
   }
 }

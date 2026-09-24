@@ -24,6 +24,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Security
+import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -33,6 +34,10 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -43,6 +48,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.BrowserTab
+import com.example.ui.theme.AziOrange
 import com.example.ui.theme.CyberBackground
 import com.example.ui.theme.CyberBorder
 import com.example.ui.theme.CyberCardDark
@@ -65,6 +71,16 @@ fun TabManagerSheet(
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    var selectedFilter by remember { mutableStateOf(0) } // 0: All, 1: Standard, 2: Private
+
+    val filteredTabs = remember(tabs, selectedFilter) {
+        when (selectedFilter) {
+            1 -> tabs.filter { !it.isIncognito }
+            2 -> tabs.filter { it.isIncognito }
+            else -> tabs
+        }
+    }
+
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -110,6 +126,36 @@ fun TabManagerSheet(
 
         Spacer(modifier = Modifier.height(10.dp))
 
+        // Brave-Style Tab Type Filters
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            TabFilterPill(
+                title = "All (${tabs.size})",
+                selected = selectedFilter == 0,
+                accentColor = AziOrange,
+                onClick = { selectedFilter = 0 },
+                modifier = Modifier.weight(1f)
+            )
+            TabFilterPill(
+                title = "Standard (${tabs.count { !it.isIncognito }})",
+                selected = selectedFilter == 1,
+                accentColor = AziOrange,
+                onClick = { selectedFilter = 1 },
+                modifier = Modifier.weight(1f)
+            )
+            TabFilterPill(
+                title = "Private (${tabs.count { it.isIncognito }})",
+                selected = selectedFilter == 2,
+                accentColor = CyberIncognito,
+                onClick = { selectedFilter = 2 },
+                modifier = Modifier.weight(1f)
+            )
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
         // Tab action buttons (+ New Tab, + Incognito)
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -123,8 +169,8 @@ fun TabManagerSheet(
                     .testTag("new_tab_button"),
                 shape = RoundedCornerShape(10.dp),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = CyberEmerald,
-                    contentColor = Color.Black
+                    containerColor = AziOrange,
+                    contentColor = Color.White
                 )
             ) {
                 Icon(
@@ -152,7 +198,7 @@ fun TabManagerSheet(
                     modifier = Modifier.size(16.dp)
                 )
                 Spacer(modifier = Modifier.width(4.dp))
-                Text("Incognito Tab", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                Text("Private Tab", fontSize = 12.sp, fontWeight = FontWeight.Bold)
             }
         }
 
@@ -165,7 +211,7 @@ fun TabManagerSheet(
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            items(tabs) { tab ->
+            items(filteredTabs, key = { it.id }) { tab ->
                 val isActive = tab.id == activeTabId
                 Card(
                     modifier = Modifier
@@ -174,12 +220,14 @@ fun TabManagerSheet(
                         .clickable { onSelectTab(tab.id) }
                         .testTag("tab_item_${tab.id}"),
                     shape = RoundedCornerShape(14.dp),
-                    colors = CardDefaults.cardColors(containerColor = CyberCardDark),
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (tab.isIncognito) CyberIncognito.copy(alpha = 0.12f) else CyberCardDark
+                    ),
                     border = androidx.compose.foundation.BorderStroke(
                         1.5.dp,
                         when {
                             isActive && tab.isIncognito -> CyberIncognito
-                            isActive -> CyberEmerald
+                            isActive -> AziOrange
                             else -> CyberBorder
                         }
                     )
@@ -195,12 +243,12 @@ fun TabManagerSheet(
                             Icon(
                                 imageVector = if (tab.isIncognito) Icons.Default.Security else Icons.Default.Language,
                                 contentDescription = null,
-                                tint = if (tab.isIncognito) CyberIncognito else CyberEmerald,
+                                tint = if (tab.isIncognito) CyberIncognito else AziOrange,
                                 modifier = Modifier.size(14.dp)
                             )
                             Spacer(modifier = Modifier.width(4.dp))
                             Text(
-                                text = if (tab.isIncognito) "Incognito" else "Web",
+                                text = if (tab.isIncognito) "Private" else "Web",
                                 color = if (tab.isIncognito) CyberIncognito else CyberTextSecondary,
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.SemiBold
@@ -208,7 +256,7 @@ fun TabManagerSheet(
                             Spacer(modifier = Modifier.weight(1f))
                             IconButton(
                                 onClick = { onCloseTab(tab.id) },
-                                modifier = Modifier.size(20.dp)
+                                modifier = Modifier.size(22.dp)
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Close,
@@ -232,16 +280,60 @@ fun TabManagerSheet(
 
                         Spacer(modifier = Modifier.weight(1f))
 
-                        Text(
-                            text = if (tab.isHome) "Home" else tab.url,
-                            color = CyberTextSecondary,
-                            fontSize = 10.sp,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = if (tab.isHome) "Home" else tab.displayDomain,
+                                color = CyberTextSecondary,
+                                fontSize = 10.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f)
+                            )
+                            if (tab.blockedTrackersCount > 0) {
+                                Icon(
+                                    imageVector = Icons.Default.Shield,
+                                    contentDescription = null,
+                                    tint = AziOrange,
+                                    modifier = Modifier.size(11.dp)
+                                )
+                                Spacer(modifier = Modifier.width(2.dp))
+                                Text(
+                                    text = "${tab.blockedTrackersCount}",
+                                    color = AziOrange,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
                     }
                 }
             }
         }
+    }
+}
+
+@Composable
+fun TabFilterPill(
+    title: String,
+    selected: Boolean,
+    accentColor: Color,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(10.dp))
+            .background(if (selected) accentColor.copy(alpha = 0.2f) else CyberSurfaceElevated)
+            .border(1.dp, if (selected) accentColor else CyberBorder, RoundedCornerShape(10.dp))
+            .clickable { onClick() }
+            .padding(vertical = 8.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = title,
+            color = if (selected) CyberTextPrimary else CyberTextSecondary,
+            fontSize = 11.sp,
+            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium
+        )
     }
 }
