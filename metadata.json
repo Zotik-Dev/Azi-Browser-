@@ -1,0 +1,6 @@
+{
+  "name": "Aegis Browser",
+  "description": "Ultra-secure encrypted web browser with full VPN tunnel control, virus & phishing defense, DoH DNS protection, and ad/tracker shield.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
